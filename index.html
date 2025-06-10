@@ -321,6 +321,16 @@
 
         // --- FIREBASE SETUP ---
         function setupFirebase() {
+            if (!firebaseConfig || !firebaseConfig.projectId) {
+                console.log('Firebase config missing. Running in local mode.');
+                authStatusEl.textContent = 'Modalità locale: la gestione operatori è disabilitata.';
+                authStatusEl.classList.remove('hidden');
+                const tabBtn = document.querySelector('[data-tab="operatori"]');
+                const tabContent = document.getElementById('tab-operatori');
+                if (tabBtn) tabBtn.classList.add('hidden');
+                if (tabContent) tabContent.classList.add('hidden');
+                return;
+            }
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
