@@ -17,9 +17,12 @@
     </ul>
   </nav>
   <div id="csv" class="tab">
-    <div class="mb-4">
-      <label class="block mb-2 font-medium">Carica CSV:</label>
-      <input type="file" id="csvFile" accept=".csv" class="border p-2">
+    <div class="mb-4 flex items-center gap-2">
+      <div>
+        <label class="block mb-2 font-medium">Carica CSV:</label>
+        <input type="file" id="csvFile" accept=".csv" class="border p-2">
+      </div>
+      <button id="loadCsvBtn" class="self-end px-4 py-2 bg-green-600 text-white rounded">Carica</button>
       <span id="fileName" class="ml-2 text-sm text-green-700"></span>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4" id="filters">
@@ -171,14 +174,20 @@ tabs.forEach(btn => btn.addEventListener('click', () => {
 // CSV Data
 let csvData = [];
 let filtered = [];
+let selectedFile = null;
 
 document.getElementById('csvFile').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
+  selectedFile = file;
   document.getElementById('fileName').textContent = file.name;
+});
+
+document.getElementById('loadCsvBtn').addEventListener('click', () => {
+  if (!selectedFile) return;
   const reader = new FileReader();
   reader.onload = () => parseCSV(reader.result);
-  reader.readAsText(file);
+  reader.readAsText(selectedFile);
 });
 
 function parseCSV(text) {
