@@ -94,6 +94,9 @@
                         </label>
                         <input type="file" id="csv-file-input" class="hidden" accept=".csv">
                         <p id="csv-file-name" class="mt-3 text-sm text-slate-500 text-center">Nessun file selezionato.</p>
+                        <button id="load-csv-btn" class="mt-4 w-full bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary transition">
+                            Carica
+                        </button>
                     </div>
 
                     <div id="filters-section" class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm space-y-4 hidden">
@@ -280,6 +283,8 @@
         const tabContents = document.querySelectorAll('.tab-content');
         const csvFileInput = document.getElementById('csv-file-input');
         const csvFileNameEl = document.getElementById('csv-file-name');
+        const loadCsvBtn = document.getElementById('load-csv-btn');
+        let selectedCsvFile = null;
         const filtersSection = document.getElementById('filters-section');
         const statsSection = document.getElementById('stats-section');
         const tableSection = document.getElementById('table-section');
@@ -436,7 +441,11 @@
                     }
                 });
             });
-            csvFileInput.addEventListener('change', handleCsvFile);
+            csvFileInput.addEventListener('change', (e) => {
+                selectedCsvFile = e.target.files[0] || null;
+                csvFileNameEl.textContent = selectedCsvFile ? selectedCsvFile.name : 'Nessun file selezionato.';
+            });
+            loadCsvBtn.addEventListener('click', handleCsvLoad);
             operatorForm.addEventListener('submit', handleOperatorFormSubmit);
             cancelEditBtn.addEventListener('click', resetOperatorForm);
             operatorCsvImport.addEventListener('change', handleOperatorCsvImport);
@@ -457,11 +466,13 @@
         }
         
         // --- CSV HANDLING (TAB 1) ---
-        function handleCsvFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        function handleCsvLoad() {
+            if (!selectedCsvFile) {
+                showModal('Nessun file', 'Seleziona un file CSV prima di procedere.', 'error');
+                return;
+            }
 
-            csvFileNameEl.textContent = file.name;
+            csvFileNameEl.textContent = selectedCsvFile.name;
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
@@ -477,23 +488,55 @@
                     resetCsvView();
                 }
             };
-            reader.readAsText(file, 'ISO-8859-1');
+            reader.readAsText(selectedCsvFile, 'ISO-8859-1');
         }
 
         function parseCsv(text) {
             const rows = text.trim().split(/\r?\n/);
             if (rows.length < 2) throw new Error("Il file CSV è vuoto o contiene solo l'intestazione.");
-            csvHeaders = rows[0].split(';').map(h => h.trim());
-            csvData = rows.slice(1).map((rowStr, index) => {
+            const headers = rows[0].split(';').map(h => h.trim());
+            const idx = {};
+            headers.forEach((h, i) => idx[h] = i);
+            const required = ['Settimana','Struttura','Servizio','Operatori','Lunedi','ORA IN.1','ORA OUT.1','Martedi','ORA IN.2','ORA OUT.2','Mercoledi','ORA IN.3','ORA OUT.3','Giovedi','ORA IN.4','ORA OUT.4','Venerdi','ORA IN.5','ORA OUT.5','Sabato','ORA IN.6','ORA OUT.6','Domenica','ORA IN.7','ORA OUT.7'];
+            if(!required.every(h => headers.includes(h))) {
+                throw new Error('Il CSV non contiene tutte le colonne richieste.');
+            }
+            csvHeaders = ['SETTIMANA','STRUTTURA','SERVIZIO','OPERATORE','CODICE','ORA IN','ORA OUT','GIORNO SETT','TOT'];
+            csvData = [];
+            const days = [
+                ['Lunedi','ORA IN.1','ORA OUT.1',1],
+                ['Martedi','ORA IN.2','ORA OUT.2',2],
+                ['Mercoledi','ORA IN.3','ORA OUT.3',3],
+                ['Giovedi','ORA IN.4','ORA OUT.4',4],
+                ['Venerdi','ORA IN.5','ORA OUT.5',5],
+                ['Sabato','ORA IN.6','ORA OUT.6',6],
+                ['Domenica','ORA IN.7','ORA OUT.7',7]
+            ];
+            rows.slice(1).forEach((rowStr) => {
                 const values = rowStr.split(';');
-                let rowObject = { _id: index };
-                csvHeaders.forEach((header, i) => {
-                    rowObject[header] = values[i] ? values[i].trim() : '';
+                const base = {
+                    SETTIMANA: values[idx['Settimana']]?.trim(),
+                    STRUTTURA: values[idx['Struttura']]?.trim(),
+                    SERVIZIO: values[idx['Servizio']]?.trim(),
+                    OPERATORE: values[idx['Operatori']]?.trim(),
+                };
+                days.forEach(d => {
+                    const code = values[idx[d[0]]] ? values[idx[d[0]]].trim() : '';
+                    const inVal = values[idx[d[1]]] ? values[idx[d[1]]].trim() : '';
+                    const outVal = values[idx[d[2]]] ? values[idx[d[2]]].trim() : '';
+                    if(code || inVal || outVal) {
+                        const entry = {
+                            _id: csvData.length,
+                            ...base,
+                            CODICE: code,
+                            'ORA IN': inVal,
+                            'ORA OUT': outVal,
+                            'GIORNO SETT': String(d[3])
+                        };
+                        entry.TOT = calculateTotalHours(inVal, outVal);
+                        csvData.push(entry);
+                    }
                 });
-                if(rowObject['ORA IN'] && rowObject['ORA OUT'] && !rowObject['TOT']) {
-                   rowObject['TOT'] = calculateTotalHours(rowObject['ORA IN'], rowObject['ORA OUT']);
-                }
-                return rowObject;
             });
         }
         
@@ -502,6 +545,7 @@
             filteredData = [];
             csvHeaders = [];
             csvFileInput.value = '';
+            selectedCsvFile = null;
             csvFileNameEl.textContent = 'Nessun file selezionato.';
             filtersSection.classList.add('hidden');
             statsSection.classList.add('hidden');
