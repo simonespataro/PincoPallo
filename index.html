@@ -1,458 +1,969 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Analisi Turni Operatori</title>
-<script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisi Turni Operatori</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Icons: Lucide -->
+    <script src="https://unpkg.com/lucide/dist/umd/lucide.min.js"></script>
+
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- Custom Tailwind Theme -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-primary': '#16a34a', // green-600
+                        'brand-secondary': '#15803d', // green-700
+                        'brand-light': '#dcfce7', // green-100
+                        'brand-dark': '#14532d', // green-900
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Stile per la scrollbar per un aspetto più pulito */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-button.active { background-color: #16a34a; color: white; }
+        .tab-button { transition: all 0.2s ease-in-out; }
+
+        /* Stili per il custom dropdown filter */
+        .filter-dropdown-panel {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
-<body class="bg-green-50 text-gray-800">
-<div class="container mx-auto p-4" id="app">
-  <h1 class="text-2xl font-bold text-green-700 mb-4">Analisi Turni Operatori</h1>
-  <nav class="mb-4">
-    <ul class="flex border-b border-green-200" id="tabs">
-      <li class="mr-2"><button data-tab="csv" class="py-2 px-4 text-green-700 border-b-2 border-green-700">Analisi Dati (CSV)</button></li>
-      <li class="mr-2"><button data-tab="calendar" class="py-2 px-4 text-green-700">Vista Calendario (CSV)</button></li>
-      <li><button data-tab="operators" class="py-2 px-4 text-green-700">Gestione Operatori</button></li>
-    </ul>
-  </nav>
-  <div id="csv" class="tab">
-    <div class="mb-4 flex items-center gap-2">
-      <div>
-        <label class="block mb-2 font-medium">Carica CSV:</label>
-        <input type="file" id="csvFile" accept=".csv" class="border p-2">
-      </div>
-      <button id="loadCsvBtn" class="self-end px-4 py-2 bg-green-600 text-white rounded">Carica</button>
-      <span id="fileName" class="ml-2 text-sm text-green-700"></span>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4" id="filters">
-      <div>
-        <label class="block text-sm font-medium">Operatore</label>
-        <select id="fOperatore" multiple class="w-full border p-2"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Codice Turno</label>
-        <select id="fCodice" multiple class="w-full border p-2"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Servizio</label>
-        <select id="fServizio" multiple class="w-full border p-2"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Struttura</label>
-        <select id="fStruttura" multiple class="w-full border p-2"></select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Settimana</label>
-        <select id="fSettimana" multiple class="w-full border p-2"></select>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4" id="stats">
-      <div class="p-4 bg-white shadow rounded">
-        <div class="text-sm">Righe Filtrate</div>
-        <div class="text-xl font-bold" id="sRighe">0</div>
-      </div>
-      <div class="p-4 bg-white shadow rounded">
-        <div class="text-sm">Totale Ore</div>
-        <div class="text-xl font-bold" id="sTotOre">0</div>
-      </div>
-      <div class="p-4 bg-white shadow rounded">
-        <div class="text-sm">Media Ore Residuo</div>
-        <div class="text-xl font-bold" id="sMediaResiduo">0</div>
-      </div>
-      <div class="p-4 bg-white shadow rounded">
-        <div class="text-sm">Media Ore Recupero</div>
-        <div class="text-xl font-bold" id="sMediaRecupero">0</div>
-      </div>
-    </div>
-    <div class="overflow-auto">
-      <table class="min-w-full bg-white" id="dataTable">
-        <thead>
-          <tr class="bg-green-200 text-left">
-            <th class="p-2">Operatore</th>
-            <th class="p-2">Codice Turno</th>
-            <th class="p-2">Servizio</th>
-            <th class="p-2">Struttura</th>
-            <th class="p-2">Settimana</th>
-            <th class="p-2">Data</th>
-            <th class="p-2">Ora In</th>
-            <th class="p-2">Ora Out</th>
-            <th class="p-2">Tot</th>
-            <th class="p-2">Residuo</th>
-            <th class="p-2">Recupero</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <div id="calendar" class="tab hidden">
-    <div id="calendarContent" class="space-y-8"></div>
-    <button id="pdfBtn" class="mt-4 px-4 py-2 bg-green-600 text-white rounded">Download PDF Calendario</button>
-  </div>
-  <div id="operators" class="tab hidden">
-    <div class="flex flex-col md:flex-row gap-4">
-      <div class="md:w-1/2">
-        <form id="opForm" class="bg-white p-4 shadow rounded">
-          <input type="hidden" id="opId">
-          <div class="mb-2">
-            <label class="block text-sm font-medium">Nome</label>
-            <input id="opNome" class="w-full border p-2" required>
-          </div>
-          <div class="mb-2">
-            <label class="block text-sm font-medium">Qualifica</label>
-            <input id="opQualifica" class="w-full border p-2" required>
-          </div>
-          <div class="mb-2">
-            <label class="block text-sm font-medium">Servizio</label>
-            <input id="opServizio" class="w-full border p-2" required>
-          </div>
-          <div class="mb-2">
-            <label class="block text-sm font-medium">Struttura</label>
-            <input id="opStruttura" class="w-full border p-2" required>
-          </div>
-          <div class="mb-2">
-            <label class="block text-sm font-medium">Ore Contrattuali</label>
-            <input id="opOre" class="w-full border p-2" required>
-          </div>
-          <div class="flex justify-end gap-2">
-            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Salva</button>
-            <button type="button" id="opReset" class="px-4 py-2 bg-gray-200 rounded">Reset</button>
-          </div>
-        </form>
-        <div class="mt-4">
-          <label class="block mb-2 font-medium">Importa CSV Operatori</label>
-          <input type="file" id="opCsv" accept=".csv" class="border p-2">
+<body class="bg-slate-100 font-sans text-slate-800">
+
+    <!-- App Container -->
+    <div id="app" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Header -->
+        <header class="mb-6">
+            <h1 class="text-4xl font-bold text-brand-dark flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-brand-primary"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Analisi Turni Operatori
+            </h1>
+            <p class="text-slate-500 mt-1">Carica, analizza e gestisci i dati dei turni di lavoro.</p>
+        </header>
+
+        <!-- Firebase Auth Status -->
+        <div id="auth-status" class="mb-4 p-3 rounded-lg text-center bg-brand-light text-brand-dark border border-brand-primary/20 hidden"></div>
+        
+        <!-- Tab Navigation -->
+        <div class="mb-6 border-b border-slate-300">
+            <nav class="flex space-x-2 -mb-px">
+                <button data-tab="analisi" class="tab-button active py-3 px-5 font-semibold text-slate-600 hover:bg-brand-light hover:text-brand-primary rounded-t-lg focus:outline-none">
+                    Analisi Dati (CSV)
+                </button>
+                <button data-tab="calendario" class="tab-button py-3 px-5 font-semibold text-slate-600 hover:bg-brand-light hover:text-brand-primary rounded-t-lg focus:outline-none">
+                    Vista Calendario
+                </button>
+                <button data-tab="operatori" class="tab-button py-3 px-5 font-semibold text-slate-600 hover:bg-brand-light hover:text-brand-primary rounded-t-lg focus:outline-none">
+                    Gestione Operatori
+                </button>
+            </nav>
         </div>
-      </div>
-      <div class="md:w-1/2">
-        <ul id="opList" class="bg-white p-4 shadow rounded space-y-2"></ul>
-      </div>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Tab 1: Analisi Dati -->
+            <div id="tab-analisi" class="tab-content active space-y-6">
+                <!-- Sezione Upload e Filtri -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-bold text-brand-dark mb-4">1. Carica File CSV</h2>
+                        <label for="csv-file-input" class="w-full cursor-pointer bg-brand-light text-brand-primary font-bold py-3 px-4 rounded-lg inline-flex items-center justify-center border-2 border-dashed border-brand-primary/50 hover:bg-green-200 transition">
+                            <i data-lucide="upload-cloud" class="mr-2"></i>
+                            <span>Seleziona un file .csv</span>
+                        </label>
+                        <input type="file" id="csv-file-input" class="hidden" accept=".csv">
+                        <p id="csv-file-name" class="mt-3 text-sm text-slate-500 text-center">Nessun file selezionato.</p>
+                    </div>
+
+                    <div id="filters-section" class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm space-y-4 hidden">
+                         <div class="flex justify-between items-center mb-2">
+                            <h2 class="text-xl font-bold text-brand-dark">2. Filtra Dati</h2>
+                            <button id="reset-filters-btn" class="text-sm text-brand-primary hover:text-brand-secondary font-semibold flex items-center gap-1">
+                                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                                Reset Filtri
+                            </button>
+                        </div>
+                        <div id="filters-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Custom filter dropdowns will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sezione Statistiche -->
+                <div id="stats-section" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 hidden">
+                    <div class="bg-white p-5 rounded-xl shadow-sm flex items-center space-x-4">
+                        <div class="bg-brand-light p-3 rounded-full"><i data-lucide="list-filter" class="w-6 h-6 text-brand-primary"></i></div>
+                        <div>
+                            <p class="text-sm text-slate-500">Righe Filtrate</p>
+                            <p id="stat-rows" class="text-2xl font-bold text-brand-dark">0</p>
+                        </div>
+                    </div>
+                     <div class="bg-white p-5 rounded-xl shadow-sm flex items-center space-x-4">
+                        <div class="bg-brand-light p-3 rounded-full"><i data-lucide="clock" class="w-6 h-6 text-brand-primary"></i></div>
+                        <div>
+                            <p class="text-sm text-slate-500">Totale Ore Lavorate</p>
+                            <p id="stat-total-hours" class="text-2xl font-bold text-brand-dark">00:00</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm flex items-center space-x-4">
+                        <div class="bg-brand-light p-3 rounded-full"><i data-lucide="trending-up" class="w-6 h-6 text-brand-primary"></i></div>
+                        <div>
+                            <p class="text-sm text-slate-500">Media Ore Recupero</p>
+                            <p id="stat-avg-recupero" class="text-2xl font-bold text-brand-dark">0.00</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm flex items-center space-x-4">
+                        <div class="bg-brand-light p-3 rounded-full"><i data-lucide="trending-down" class="w-6 h-6 text-brand-primary"></i></div>
+                        <div>
+                            <p class="text-sm text-slate-500">Media Ore Residuo</p>
+                            <p id="stat-avg-residuo" class="text-2xl font-bold text-brand-dark">0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabella Dati -->
+                <div id="table-section" class="bg-white p-4 sm:p-6 rounded-xl shadow-sm hidden">
+                    <h2 class="text-xl font-bold text-brand-dark mb-4">3. Dati Filtrati</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-slate-500">
+                            <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                                <tr>
+                                    <!-- Headers will be generated dynamically -->
+                                </tr>
+                            </thead>
+                            <tbody id="csv-table-body">
+                                <!-- Rows will be generated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Vista Calendario -->
+            <div id="tab-calendario" class="tab-content space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-brand-dark">Vista Calendario Settimanale</h2>
+                        <button id="download-pdf-btn" class="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary transition flex items-center gap-2 disabled:bg-slate-400" disabled>
+                            <i data-lucide="file-down"></i>
+                            Download PDF
+                        </button>
+                    </div>
+                    <div id="calendar-view" class="space-y-8">
+                        <p class="text-slate-500 text-center py-8">Carica un file CSV e applica dei filtri per visualizzare il calendario.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Gestione Operatori -->
+            <div id="tab-operatori" class="tab-content space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Colonna Form -->
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 id="form-title" class="text-xl font-bold text-brand-dark mb-4">Aggiungi Operatore</h2>
+                        <form id="operator-form" class="space-y-4">
+                            <input type="hidden" id="operator-id">
+                            <div>
+                                <label for="op-nome" class="block text-sm font-medium text-slate-700">Nome</label>
+                                <input type="text" id="op-nome" required class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="op-qualifica" class="block text-sm font-medium text-slate-700">Qualifica</label>
+                                <input type="text" id="op-qualifica" required class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="op-servizio" class="block text-sm font-medium text-slate-700">Servizio</label>
+                                <input type="text" id="op-servizio" required class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="op-struttura" class="block text-sm font-medium text-slate-700">Struttura</label>
+                                <input type="text" id="op-struttura" required class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="op-ore" class="block text-sm font-medium text-slate-700">Ore Contrattuali</label>
+                                <input type="number" id="op-ore" required class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm">
+                            </div>
+                            <div class="flex items-center space-x-2 pt-2">
+                                <button type="submit" class="w-full bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary transition flex items-center justify-center gap-2">
+                                    <i data-lucide="save"></i> <span id="save-button-text">Salva</span>
+                                </button>
+                                <button type="button" id="cancel-edit-btn" class="w-full bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg hover:bg-slate-300 transition hidden">
+                                    Annulla
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Colonna Lista Operatori -->
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                        <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                             <h2 class="text-xl font-bold text-brand-dark">Elenco Operatori</h2>
+                             <div>
+                                <label for="operator-csv-import" class="cursor-pointer bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition inline-flex items-center gap-2 text-sm">
+                                    <i data-lucide="users-round"></i>
+                                    Importa da CSV
+                                </label>
+                                <input type="file" id="operator-csv-import" class="hidden" accept=".csv">
+                            </div>
+                        </div>
+                        <div id="operator-list" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                           <p class="text-slate-500 text-center py-8">Caricamento operatori...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
-  </div>
-</div>
-<!-- Modal -->
-<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-  <div class="bg-white p-4 rounded shadow max-w-sm w-full">
-    <div id="modalMessage" class="mb-4"></div>
-    <div class="flex justify-end gap-2">
-      <button id="modalCancel" class="px-4 py-2 bg-gray-200 rounded hidden">Annulla</button>
-      <button id="modalOk" class="px-4 py-2 bg-green-600 text-white rounded">OK</button>
+
+    <!-- Modal Component -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div id="modal-content" class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all scale-95 opacity-0">
+            <h3 id="modal-title" class="text-lg font-bold"></h3>
+            <p id="modal-message" class="mt-2 text-sm text-slate-600"></p>
+            <div id="modal-actions" class="mt-6 flex justify-end space-x-3">
+                <!-- Buttons are added dynamically -->
+            </div>
+        </div>
     </div>
-  </div>
-</div>
-<script type="module">
-function showModal(message, opts = {}) {
-  const modal = document.getElementById("modal");
-  const msg = document.getElementById("modalMessage");
-  const ok = document.getElementById("modalOk");
-  const cancel = document.getElementById("modalCancel");
-  msg.textContent = message;
-  ok.textContent = opts.okText || "OK";
-  cancel.textContent = opts.cancelText || "Annulla";
-  cancel.classList.toggle("hidden", !opts.onConfirm);
-  modal.classList.remove("hidden");
-  return new Promise(res => {
-    ok.onclick = () => { modal.classList.add("hidden"); res(true); };
-    cancel.onclick = () => { modal.classList.add("hidden"); res(false); };
-  });
-}
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Importa le funzioni necessarie dai moduli Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- GLOBAL VARIABLES & CONFIG ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-// Tabs logic
-const tabs = document.querySelectorAll('#tabs button');
-const tabViews = document.querySelectorAll('.tab');
+        let app, auth, db;
+        let userId = null;
+        let operatorsUnsubscribe = null;
 
-tabs.forEach(btn => btn.addEventListener('click', () => {
-  tabs.forEach(b => b.classList.remove('border-green-700', 'border-b-2'));
-  btn.classList.add('border-green-700', 'border-b-2');
-  const id = btn.getAttribute('data-tab');
-  tabViews.forEach(v => v.classList.add('hidden'));
-  document.getElementById(id).classList.remove('hidden');
-}));
+        let csvData = [];
+        let filteredData = [];
+        let csvHeaders = [];
+        let operatorsData = [];
+        
+        // --- DOM ELEMENTS ---
+        const authStatusEl = document.getElementById('auth-status');
+        const tabs = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const csvFileInput = document.getElementById('csv-file-input');
+        const csvFileNameEl = document.getElementById('csv-file-name');
+        const filtersSection = document.getElementById('filters-section');
+        const statsSection = document.getElementById('stats-section');
+        const tableSection = document.getElementById('table-section');
+        const tableBody = document.getElementById('csv-table-body');
+        const filtersContainer = document.getElementById('filters-container');
+        const resetFiltersBtn = document.getElementById('reset-filters-btn');
+        const statsEls = {
+            rows: document.getElementById('stat-rows'),
+            totalHours: document.getElementById('stat-total-hours'),
+            avgRecupero: document.getElementById('stat-avg-recupero'),
+            avgResiduo: document.getElementById('stat-avg-residuo'),
+        };
+        const calendarView = document.getElementById('calendar-view');
+        const downloadPdfBtn = document.getElementById('download-pdf-btn');
 
-// CSV Data
-let csvData = [];
-let filtered = [];
-let selectedFile = null;
+        // Operator management DOM elements
+        const operatorForm = document.getElementById('operator-form');
+        const operatorListEl = document.getElementById('operator-list');
+        const formTitle = document.getElementById('form-title');
+        const operatorIdInput = document.getElementById('operator-id');
+        const saveButtonText = document.getElementById('save-button-text');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const operatorCsvImport = document.getElementById('operator-csv-import');
+        
+        // Modal DOM elements
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modal-content');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalActions = document.getElementById('modal-actions');
 
-document.getElementById('csvFile').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  selectedFile = file;
-  document.getElementById('fileName').textContent = file.name;
-});
+        const filterKeys = {
+            operator: { label: 'Operatore', csvColumn: 'OPERATORE' },
+            turno: { label: 'Codice Turno', csvColumn: 'CODICE' },
+            servizio: { label: 'Servizio', csvColumn: 'SERVIZIO' },
+            struttura: { label: 'Struttura', csvColumn: 'STRUTTURA' },
+            settimana: { label: 'Settimana', csvColumn: 'SETTIMANA' },
+        };
+        
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setupFirebase();
+            setupEventListeners();
+        });
 
-document.getElementById('loadCsvBtn').addEventListener('click', () => {
-  if (!selectedFile) return;
-  const reader = new FileReader();
-  reader.onload = () => parseCSV(reader.result);
-  reader.readAsText(selectedFile);
-});
+        // --- FIREBASE SETUP ---
+        function setupFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setupAuthListener();
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showModal('Errore di Configurazione', `Impossibile inizializzare Firebase. Controlla la configurazione. Dettagli: ${error.message}`, 'error');
+            }
+        }
 
-function parseCSV(text) {
-  const rows = text.trim().split(/\r?\n/).map(r => r.split(';'));
-  const headers = rows.shift().map(h => h.trim());
-  csvData = [];
-  rows.forEach(row => {
-    const base = Object.fromEntries(headers.map((h,i) => [h, row[i] ? row[i].trim() : '']));
-    const giorni = ['Lunedi','Martedi','Mercoledi','Giovedi','Venerdi','Sabato','Domenica'];
-    const abbrev = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
-    giorni.forEach((g,idx) => {
-      const oraIn = base[`ORA IN.${idx+1}`] || '';
-      const oraOut = base[`ORA OUT.${idx+1}`] || '';
-      csvData.push({
-        'Operatore': base['Operatori'],
-        'Codice Turno': base[g],
-        'Servizio': base['Servizio'],
-        'Struttura': base['Struttura'],
-        'Settimana': base['Settimana'],
-        'Data': abbrev[idx],
-        'Ora In': oraIn,
-        'Ora Out': oraOut,
-        'Tot': oraIn && oraOut ? calcTot(oraIn, oraOut) : '0',
-        'Residuo': '',
-        'Recupero': ''
-      });
-    });
-  });
-  populateFilters();
-  applyFilters();
-}
+        function setupAuthListener() {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    authStatusEl.textContent = `Autenticato come utente anonimo. ID: ${userId.substring(0, 12)}...`;
+                    authStatusEl.classList.remove('hidden');
+                    setupOperatorListener();
+                } else {
+                    userId = null;
+                    if (operatorsUnsubscribe) operatorsUnsubscribe();
+                    authStatusEl.textContent = 'Autenticazione in corso...';
+                    authStatusEl.classList.remove('hidden');
+                    signInAnonymously(auth).catch((error) => {
+                        console.error("Anonymous sign-in failed:", error);
+                        showModal('Errore di Autenticazione', `Impossibile effettuare l'accesso anonimo. Assicurati che sia abilitato nel tuo progetto Firebase. Dettagli: ${error.message}`, 'error');
+                        authStatusEl.textContent = 'Autenticazione fallita.';
+                    });
+                }
+            });
+        }
+        
+        // --- MODAL & NOTIFICATIONS ---
+        function showModal(title, message, type = 'info', actions = []) {
+            modalTitle.textContent = title;
+            modalMessage.innerHTML = message;
+            modalActions.innerHTML = '';
+            modalTitle.className = "text-lg font-bold ";
+            if (type === 'error') modalTitle.classList.add('text-red-600');
+            else if (type === 'success') modalTitle.classList.add('text-green-600');
+            else if (type === 'confirm') modalTitle.classList.add('text-yellow-600');
+            else modalTitle.classList.add('text-slate-800');
 
-function populateFilters() {
-  const fields = ['Operatore','Codice Turno','Servizio','Struttura','Settimana'];
-  fields.forEach(f => {
-    const select = document.getElementById('f'+f.replace(/\s/g,''));
-    select.innerHTML = '';
-    [...new Set(csvData.map(r => r[f]))].sort().forEach(val => {
-      const opt = document.createElement('option');
-      opt.value = val; opt.textContent = val; select.appendChild(opt);
-    });
-  });
-}
+            if (actions.length === 0) {
+                const closeButton = document.createElement('button');
+                closeButton.textContent = 'Chiudi';
+                closeButton.className = 'bg-slate-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-600 transition';
+                closeButton.onclick = hideModal;
+                modalActions.appendChild(closeButton);
+            } else {
+                actions.forEach(action => {
+                    const button = document.createElement('button');
+                    button.textContent = action.label;
+                    button.className = action.class;
+                    button.onclick = () => {
+                        if(action.callback) action.callback();
+                        hideModal();
+                    };
+                    modalActions.appendChild(button);
+                });
+            }
 
-['fOperatore','fCodice','fServizio','fStruttura','fSettimana'].forEach(id => {
-  document.getElementById(id).addEventListener('change', applyFilters);
-});
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
 
-function applyFilters() {
-  const fOperatore = getSelectValues('fOperatore');
-  const fCodice = getSelectValues('fCodice');
-  const fServizio = getSelectValues('fServizio');
-  const fStruttura = getSelectValues('fStruttura');
-  const fSettimana = getSelectValues('fSettimana');
-  filtered = csvData.filter(r =>
-    (fOperatore.length ? fOperatore.includes(r['Operatore']) : true) &&
-    (fCodice.length ? fCodice.includes(r['Codice Turno']) : true) &&
-    (fServizio.length ? fServizio.includes(r['Servizio']) : true) &&
-    (fStruttura.length ? fStruttura.includes(r['Struttura']) : true) &&
-    (fSettimana.length ? fSettimana.includes(r['Settimana']) : true)
-  );
-  renderTable();
-  updateStats();
-  renderCalendar();
-}
+        function hideModal() {
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+        
+        function showConfirm(title, message, onConfirm) {
+            const actions = [
+                { label: 'Annulla', class: 'bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg hover:bg-slate-300 transition' },
+                { label: 'Conferma', class: 'bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition', callback: onConfirm }
+            ];
+            showModal(title, message, 'confirm', actions);
+        }
 
-function getSelectValues(id) {
-  return Array.from(document.getElementById(id).selectedOptions).map(o => o.value);
-}
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.dataset.tab;
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById(`tab-${tabName}`).classList.add('active');
+                    if(tabName === 'calendario' && filteredData.length > 0) {
+                        renderCalendarView();
+                    }
+                });
+            });
+            csvFileInput.addEventListener('change', handleCsvFile);
+            operatorForm.addEventListener('submit', handleOperatorFormSubmit);
+            cancelEditBtn.addEventListener('click', resetOperatorForm);
+            operatorCsvImport.addEventListener('change', handleOperatorCsvImport);
+            downloadPdfBtn.addEventListener('click', handlePdfDownload);
+            resetFiltersBtn.addEventListener('click', () => {
+                filtersContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                filtersContainer.querySelectorAll('input[type="search"]').forEach(input => {
+                    input.value = '';
+                    input.dispatchEvent(new Event('input')); // Trigger search reset
+                });
+                applyFilters();
+            });
+        }
+        
+        // --- CSV HANDLING (TAB 1) ---
+        function handleCsvFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-function calcTot(inStr, outStr) {
-  const [ih, im] = inStr.split(':').map(Number);
-  const [oh, om] = outStr.split(':').map(Number);
-  let start = ih * 60 + im;
-  let end = oh * 60 + om;
-  if (end < start) end += 24*60;
-  return ((end - start)/60).toFixed(2);
-}
+            csvFileNameEl.textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    parseCsv(e.target.result);
+                    populateFilters();
+                    applyFilters();
+                    filtersSection.classList.remove('hidden');
+                    statsSection.classList.remove('hidden');
+                    tableSection.classList.remove('hidden');
+                    downloadPdfBtn.disabled = false;
+                } catch (error) {
+                    showModal('Errore nel Parsing', `Impossibile leggere il file CSV. Controlla che il formato sia corretto e il delimitatore sia il punto e virgola (;).<br>Dettagli: ${error.message}`, 'error');
+                    resetCsvView();
+                }
+            };
+            reader.readAsText(file, 'ISO-8859-1');
+        }
 
-function renderTable() {
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = '';
-  filtered.forEach((row, idx) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="p-2 border">${row['Operatore']}</td>
-      <td class="p-2 border">${row['Codice Turno']}</td>
-      <td class="p-2 border">${row['Servizio']}</td>
-      <td class="p-2 border">${row['Struttura']}</td>
-      <td class="p-2 border">${row['Settimana']}</td>
-      <td class="p-2 border">${row['Data']}</td>
-      <td class="p-2 border" contenteditable data-field="Ora In" data-idx="${idx}">${row['Ora In']}</td>
-      <td class="p-2 border" contenteditable data-field="Ora Out" data-idx="${idx}">${row['Ora Out']}</td>
-      <td class="p-2 border" id="tot-${idx}">${row['Tot']}</td>
-      <td class="p-2 border">${row['Residuo']}</td>
-      <td class="p-2 border">${row['Recupero']}</td>`;
-    tbody.appendChild(tr);
-  });
-}
+        function parseCsv(text) {
+            const rows = text.trim().split(/\r?\n/);
+            if (rows.length < 2) throw new Error("Il file CSV è vuoto o contiene solo l'intestazione.");
+            csvHeaders = rows[0].split(';').map(h => h.trim());
+            csvData = rows.slice(1).map((rowStr, index) => {
+                const values = rowStr.split(';');
+                let rowObject = { _id: index };
+                csvHeaders.forEach((header, i) => {
+                    rowObject[header] = values[i] ? values[i].trim() : '';
+                });
+                if(rowObject['ORA IN'] && rowObject['ORA OUT'] && !rowObject['TOT']) {
+                   rowObject['TOT'] = calculateTotalHours(rowObject['ORA IN'], rowObject['ORA OUT']);
+                }
+                return rowObject;
+            });
+        }
+        
+        function resetCsvView(){
+            csvData = [];
+            filteredData = [];
+            csvHeaders = [];
+            csvFileInput.value = '';
+            csvFileNameEl.textContent = 'Nessun file selezionato.';
+            filtersSection.classList.add('hidden');
+            statsSection.classList.add('hidden');
+            tableSection.classList.add('hidden');
+            downloadPdfBtn.disabled = true;
+            tableBody.innerHTML = '';
+            calendarView.innerHTML = '<p class="text-slate-500 text-center py-8">Carica un file CSV e applica dei filtri per visualizzare il calendario.</p>';
+            filtersContainer.innerHTML = '';
+            updateStats();
+        }
 
-document.getElementById('tableBody').addEventListener('blur', e => {
-  if (e.target.dataset.idx !== undefined) {
-    const idx = e.target.dataset.idx;
-    const field = e.target.dataset.field;
-    filtered[idx][field] = e.target.textContent.trim();
-    const tot = calcTot(filtered[idx]['Ora In'], filtered[idx]['Ora Out']);
-    filtered[idx]['Tot'] = tot;
-    document.getElementById('tot-'+idx).textContent = tot;
-    updateStats();
-  }
-}, true);
+        // --- FILTER LOGIC (NEW & FIXED) ---
 
-function updateStats() {
-  document.getElementById('sRighe').textContent = filtered.length;
-  const totOre = filtered.reduce((a,r) => a + parseFloat(r['Tot']||0), 0);
-  document.getElementById('sTotOre').textContent = totOre.toFixed(2);
-  const mediaResiduo = filtered.reduce((a,r) => a + parseFloat(r['Residuo']||0), 0) / (filtered.length||1);
-  document.getElementById('sMediaResiduo').textContent = mediaResiduo.toFixed(2);
-  const mediaRecupero = filtered.reduce((a,r) => a + parseFloat(r['Recupero']||0), 0) / (filtered.length||1);
-  document.getElementById('sMediaRecupero').textContent = mediaRecupero.toFixed(2);
-}
+        function populateFilters() {
+            filtersContainer.innerHTML = '';
+            Object.keys(filterKeys).forEach(key => {
+                const config = filterKeys[key];
+                const uniqueValues = [...new Set(csvData.map(row => row[config.csvColumn]).filter(Boolean))];
+                uniqueValues.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric: true}));
+                
+                const filterEl = createFilterDropdown(key, config.label, uniqueValues);
+                filtersContainer.appendChild(filterEl);
+            });
+            lucide.createIcons();
+        }
+        
+        function createFilterDropdown(key, label, options) {
+            const container = document.createElement('div');
+            container.className = 'relative';
+            container.dataset.filterKey = key;
 
-// Calendar view
-function renderCalendar() {
-  const container = document.getElementById('calendarContent');
-  container.innerHTML = '';
-  const weeks = {};
-  filtered.forEach(r => {
-    if (!weeks[r['Settimana']]) weeks[r['Settimana']] = {};
-    if (!weeks[r['Settimana']][r['Operatore']]) weeks[r['Settimana']][r['Operatore']] = {};
-    weeks[r['Settimana']][r['Operatore']][r['Data']] = `${r['Codice Turno']} ${r['Ora In'] ? r['Ora In']+'-'+r['Ora Out'] : ''}`;
-  });
-  Object.keys(weeks).sort().forEach(week => {
-    const table = document.createElement('table');
-    table.className = 'min-w-full bg-white mb-4';
-    const thead = document.createElement('thead');
-    thead.innerHTML = `<tr class="bg-green-200"><th class="p-2">Operatore</th>`+
-      ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(d=>`<th class="p-2">${d}</th>`).join('')+`</tr>`;
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    Object.keys(weeks[week]).sort().forEach(op => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td class="p-2 border">${op}</td>`+
-        ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(d=>`<td class="p-2 border">${weeks[week][op][d]||''}</td>`).join('');
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `<h3 class="font-bold mb-2">Settimana ${week}</h3>`;
-    wrapper.appendChild(table);
-    container.appendChild(wrapper);
-  });
-}
+            container.innerHTML = `
+                <label class="block text-sm font-medium text-slate-700 mb-1">${label}</label>
+                <button type="button" class="filter-btn w-full bg-white border border-slate-300 rounded-md shadow-sm px-4 py-2 text-left flex items-center justify-between">
+                    <span class="truncate">Tutti</span>
+                    <i data-lucide="chevrons-up-down" class="w-4 h-4 text-slate-400"></i>
+                </button>
+                <div class="filter-panel hidden absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-slate-300 p-2">
+                    <input type="search" placeholder="Cerca..." class="w-full border-slate-300 rounded-md shadow-sm sm:text-sm mb-2 px-2 py-1">
+                    <div class="filter-dropdown-panel space-y-1">
+                        ${options.map(option => `
+                            <label class="flex items-center space-x-2 p-1 rounded-md hover:bg-slate-100 cursor-pointer">
+                                <input type="checkbox" value="${option}" class="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary">
+                                <span class="text-sm text-slate-700 truncate">${option}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
 
-// PDF Download
-import html2canvas from 'https://cdn.skypack.dev/html2canvas@1.4.1';
-import jsPDF from 'https://cdn.skypack.dev/jspdf@2.5.1';
+            const button = container.querySelector('.filter-btn');
+            const panel = container.querySelector('.filter-panel');
+            const searchInput = container.querySelector('input[type="search"]');
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]');
 
-document.getElementById('pdfBtn').addEventListener('click', async () => {
-  const pdf = new jsPDF();
-  const cal = document.getElementById('calendarContent');
-  const canvas = await html2canvas(cal);
-  const img = canvas.toDataURL('image/png');
-  const width = pdf.internal.pageSize.getWidth();
-  const height = canvas.height * width / canvas.width;
-  pdf.addImage(img, 'PNG', 0, 0, width, height);
-  pdf.save('calendario.pdf');
-});
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.filter-panel').forEach(p => {
+                    if (p !== panel) p.classList.add('hidden');
+                });
+                panel.classList.toggle('hidden');
+            });
+            
+            // **FIX**: Stop propagation on panel clicks to prevent it from closing
+            panel.addEventListener('click', (e) => e.stopPropagation());
+            
+            searchInput.addEventListener('input', () => {
+                const searchTerm = searchInput.value.toLowerCase();
+                container.querySelectorAll('.filter-dropdown-panel label').forEach(label => {
+                    const text = label.textContent.toLowerCase();
+                    label.style.display = text.includes(searchTerm) ? '' : 'none';
+                });
+            });
 
-const opList = document.getElementById('opList');
-const opForm = document.getElementById('opForm');
-let operators = [];
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                   updateFilterButton(container);
+                   applyFilters();
+                });
+            });
 
-function saveOperators() {
-  localStorage.setItem('operators', JSON.stringify(operators));
-}
+            return container;
+        }
+        
+        function updateFilterButton(container) {
+            const buttonText = container.querySelector('.filter-btn span');
+            const selectedCount = container.querySelectorAll('input:checked').length;
+            if (selectedCount === 0) {
+                buttonText.textContent = 'Tutti';
+                buttonText.classList.remove('font-bold', 'text-brand-primary');
+            } else {
+                buttonText.textContent = `${selectedCount} selezionati`;
+                buttonText.classList.add('font-bold', 'text-brand-primary');
+            }
+        }
+        
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.filter-panel').forEach(p => p.classList.add('hidden'));
+        });
 
-function renderOperatorList() {
-  opList.innerHTML = '';
-  operators.sort((a,b) => a.Nome.localeCompare(b.Nome));
-  operators.forEach(op => {
-    const li = document.createElement('li');
-    li.className = 'border p-2 flex justify-between items-center';
-    li.innerHTML = `<span>${op.Nome} - ${op.Qualifica}</span>`+
-      `<div class="space-x-2"><button data-id="${op.id}" class="edit text-sm text-blue-600">Modifica</button>`+
-      `<button data-id="${op.id}" class="del text-sm text-red-600">Elimina</button></div>`;
-    opList.appendChild(li);
-  });
-}
+        function applyFilters() {
+            if (csvData.length === 0) return;
 
-function loadOperators() {
-  const stored = localStorage.getItem('operators');
-  operators = stored ? JSON.parse(stored) : [];
-  renderOperatorList();
-}
+            const activeFilters = {};
+            document.querySelectorAll('[data-filter-key]').forEach(container => {
+                const key = container.dataset.filterKey;
+                const selected = Array.from(container.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (selected.length > 0) {
+                    activeFilters[key] = selected;
+                }
+            });
 
-opList.addEventListener('click', async e => {
-  if (e.target.classList.contains('edit')) {
-    const id = e.target.dataset.id;
-    const op = operators.find(o => o.id === id);
-    if (op) {
-      opForm.opId.value = id;
-      opForm.opNome.value = op.Nome;
-      opForm.opQualifica.value = op.Qualifica;
-      opForm.opServizio.value = op.Servizio;
-      opForm.opStruttura.value = op.Struttura;
-      opForm.opOre.value = op.Ore;
-    }
-  }
-  if (e.target.classList.contains('del')) {
-    const id = e.target.dataset.id;
-    if (await showModal('Eliminare operatore?', {onConfirm:true})) {
-      operators = operators.filter(o => o.id !== id);
-      saveOperators();
-      renderOperatorList();
-    }
-  }
-});
+            filteredData = csvData.filter(row => {
+                for (const key in activeFilters) {
+                    const csvColumn = filterKeys[key].csvColumn;
+                    if (!activeFilters[key].includes(row[csvColumn])) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+            
+            renderDataTable();
+            updateStats();
+            if (document.getElementById('tab-calendario').classList.contains('active')) {
+                renderCalendarView();
+            }
+            document.querySelectorAll('[data-filter-key]').forEach(updateFilterButton);
+        }
+        
+        function renderDataTable() {
+            const thead = tableSection.querySelector('thead tr');
+            thead.innerHTML = '';
+            csvHeaders.forEach(header => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'px-6 py-3';
+                th.textContent = header;
+                thead.appendChild(th);
+            });
 
-opForm.addEventListener('submit', e => {
-  e.preventDefault();
-  const data = {
-    id: opForm.opId.value || Date.now().toString(),
-    Nome: opForm.opNome.value,
-    Qualifica: opForm.opQualifica.value,
-    Servizio: opForm.opServizio.value,
-    Struttura: opForm.opStruttura.value,
-    Ore: opForm.opOre.value
-  };
-  if (opForm.opId.value) {
-    const idx = operators.findIndex(o => o.id === opForm.opId.value);
-    operators[idx] = data;
-  } else {
-    operators.push(data);
-  }
-  saveOperators();
-  renderOperatorList();
-  opForm.reset();
-  opForm.opId.value = '';
-});
+            tableBody.innerHTML = '';
+            if(filteredData.length === 0){
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = csvHeaders.length;
+                td.className = 'text-center py-8 text-slate-500';
+                td.textContent = 'Nessun dato corrisponde ai filtri selezionati.';
+                tr.appendChild(td);
+                tableBody.appendChild(tr);
+                return;
+            }
 
-document.getElementById('opReset').addEventListener('click', () => {
-  opForm.reset();
-  opForm.opId.value = '';
-});
+            filteredData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-white border-b hover:bg-slate-50';
+                csvHeaders.forEach(header => {
+                    const td = document.createElement('td');
+                    td.className = 'px-6 py-4';
+                    td.textContent = row[header];
 
-document.getElementById('opCsv').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const rows = reader.result.trim().split(/\r?\n/).map(r => r.split(';'));
-    const headers = rows.shift();
-    rows.forEach(r => {
-      const obj = Object.fromEntries(headers.map((h,i)=>[h.trim(), r[i] ? r[i].trim() : '']));
-      obj.id = Date.now().toString() + Math.random().toString(16).slice(2);
-      operators.push(obj);
-    });
-    saveOperators();
-    renderOperatorList();
-  };
-  reader.readAsText(file);
-});
+                    if (header === 'ORA IN' || header === 'ORA OUT') {
+                        td.contentEditable = true;
+                        td.classList.add('cursor-pointer', 'bg-yellow-50', 'hover:bg-yellow-100');
+                        td.addEventListener('blur', (e) => {
+                           handleTimeEdit(row._id, header, e.target.textContent, e.target);
+                        });
+                    }
+                    if (header === 'TOT') {
+                        td.classList.add('font-bold', 'text-brand-dark');
+                    }
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+        
+        // **FIX**: Pass the edited cell element to handle invalid input correctly
+        function handleTimeEdit(rowId, header, newValue, editedCell) {
+            const originalRow = csvData.find(r => r._id === rowId);
+            const filteredRow = filteredData.find(r => r._id === rowId);
+            
+            if (!/^\d{2}:\d{2}$/.test(newValue)) {
+                showModal('Formato Ora non valido', 'Inserire l\'ora nel formato HH:MM.', 'error');
+                editedCell.textContent = originalRow[header];
+                return;
+            }
 
-loadOperators();
-</script>
+            originalRow[header] = newValue;
+            filteredRow[header] = newValue;
+            const newTot = calculateTotalHours(originalRow['ORA IN'], originalRow['ORA OUT']);
+            originalRow['TOT'] = newTot;
+            filteredRow['TOT'] = newTot;
+            applyFilters();
+        }
+
+        function updateStats() {
+            statsEls.rows.textContent = filteredData.length;
+            let totalMinutes = 0, totalRecupero = 0, totalResiduo = 0, countRecupero = 0, countResiduo = 0;
+            filteredData.forEach(row => {
+                if (row['TOT']) {
+                    const parts = row['TOT'].split(':');
+                    if (parts.length === 2) totalMinutes += parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+                }
+                const recupero = parseFloat(String(row['RECUPERO ORE']).replace(',', '.'));
+                if (!isNaN(recupero)) { totalRecupero += recupero; countRecupero++; }
+                const residuo = parseFloat(String(row['RESIDUO ORE']).replace(',', '.'));
+                if (!isNaN(residuo)) { totalResiduo += residuo; countResiduo++; }
+            });
+            const totalHours = Math.floor(totalMinutes / 60);
+            const remainingMinutes = totalMinutes % 60;
+            statsEls.totalHours.textContent = `${String(totalHours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
+            statsEls.avgRecupero.textContent = (countRecupero > 0 ? (totalRecupero / countRecupero).toFixed(2) : '0.00');
+            statsEls.avgResiduo.textContent = (countResiduo > 0 ? (totalResiduo / countResiduo).toFixed(2) : '0.00');
+        }
+
+        function calculateTotalHours(startStr, endStr) {
+            if (!startStr || !endStr || !/^\d{2}:\d{2}$/.test(startStr) || !/^\d{2}:\d{2}$/.test(endStr)) return '00:00';
+            const [startHours, startMinutes] = startStr.split(':').map(Number);
+            const [endHours, endMinutes] = endStr.split(':').map(Number);
+            let startDate = new Date(2000, 0, 1, startHours, startMinutes);
+            let endDate = new Date(2000, 0, 1, endHours, endMinutes);
+            if (endDate < startDate) endDate.setDate(endDate.getDate() + 1);
+            const diffMs = endDate - startDate;
+            const diffMinutes = Math.floor(diffMs / 60000);
+            const hours = Math.floor(diffMinutes / 60);
+            const minutes = diffMinutes % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+        
+        // --- CALENDAR VIEW (TAB 2) ---
+        function renderCalendarView() {
+            calendarView.innerHTML = '';
+            if (filteredData.length === 0) {
+                calendarView.innerHTML = '<p class="text-slate-500 text-center py-8">Nessun dato da visualizzare. Applica dei filtri nella scheda "Analisi Dati".</p>';
+                return;
+            }
+            const dataByWeek = filteredData.reduce((acc, row) => {
+                const week = row['SETTIMANA'];
+                if (!week) return acc;
+                if (!acc[week]) acc[week] = [];
+                acc[week].push(row);
+                return acc;
+            }, {});
+            const sortedWeeks = Object.keys(dataByWeek).sort((a,b) => parseInt(a) - parseInt(b));
+
+            sortedWeeks.forEach(week => {
+                const weekData = dataByWeek[week];
+                const weekContainer = document.createElement('div');
+                weekContainer.className = 'week-container';
+                const title = document.createElement('h3');
+                title.className = 'text-lg font-bold text-brand-secondary mb-3';
+                title.textContent = `Settimana ${week}`;
+                weekContainer.appendChild(title);
+                const table = document.createElement('table');
+                table.className = 'w-full text-sm text-left text-slate-500 border border-slate-200';
+                weekContainer.appendChild(table);
+                const thead = table.createTHead();
+                thead.className = 'text-xs text-slate-700 uppercase bg-slate-100';
+                const headerRow = thead.insertRow();
+                const days = ['Operatore', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+                days.forEach(day => {
+                    const th = document.createElement('th');
+                    th.scope = 'col';
+                    th.className = 'px-4 py-3 border-b border-slate-200';
+                    th.textContent = day;
+                    headerRow.appendChild(th);
+                });
+                const operatorsInWeek = [...new Set(weekData.map(r => r['OPERATORE']))].sort();
+                const tbody = table.createTBody();
+                operatorsInWeek.forEach(operator => {
+                    const operatorRow = tbody.insertRow();
+                    operatorRow.className = 'bg-white border-b hover:bg-slate-50';
+                    const operatorCell = operatorRow.insertCell();
+                    operatorCell.className = 'px-4 py-2 font-medium text-slate-900 whitespace-nowrap border-r border-slate-200';
+                    operatorCell.textContent = operator;
+                    const operatorShifts = weekData.filter(r => r['OPERATORE'] === operator);
+                    for (let i = 1; i <= 7; i++) {
+                        const dayCell = operatorRow.insertCell();
+                        dayCell.className = 'px-2 py-2 text-center text-xs';
+                        const shift = operatorShifts.find(r => parseInt(r['GIORNO SETT']) === i);
+                        if(shift) {
+                            const timeStr = (shift['ORA IN'] && shift['ORA OUT']) ? `<br><span class="text-slate-400">${shift['ORA IN']}-${shift['ORA OUT']}</span>` : '';
+                            dayCell.innerHTML = `<span class="font-bold">${shift['CODICE']}</span>${timeStr}`;
+                        } else {
+                            dayCell.textContent = '-';
+                        }
+                    }
+                });
+                calendarView.appendChild(weekContainer);
+            });
+        }
+
+        async function handlePdfDownload() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+            doc.setFontSize(18);
+            doc.text("Calendario Turni Operatori", 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            const weekContainers = calendarView.querySelectorAll('.week-container');
+            if(weekContainers.length === 0) {
+                showModal('Nessun dato', 'Non ci sono dati da esportare in PDF.', 'info');
+                return;
+            }
+            let startY = 30;
+            weekContainers.forEach((container, index) => {
+                const title = container.querySelector('h3').textContent;
+                const table = container.querySelector('table');
+                if (index > 0) {
+                     startY = doc.lastAutoTable.finalY + 15;
+                     if(startY > 180) { doc.addPage(); startY = 20; }
+                }
+                doc.setFontSize(14);
+                doc.text(title, 14, startY);
+                doc.autoTable({
+                    html: table,
+                    startY: startY + 5,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' }
+                });
+            });
+            doc.save('calendario_turni.pdf');
+        }
+
+        // --- OPERATOR MANAGEMENT (TAB 3) ---
+        function setupOperatorListener() {
+            if (!userId) return;
+            if (operatorsUnsubscribe) operatorsUnsubscribe();
+            const operatorsColRef = collection(db, `artifacts/${appId}/users/${userId}/operatori`);
+            operatorsUnsubscribe = onSnapshot(operatorsColRef, (snapshot) => {
+                const operators = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                operators.sort((a, b) => (a.Nome || '').localeCompare(b.Nome || ''));
+                operatorsData = operators;
+                renderOperatorList(operators);
+            }, (error) => {
+                console.error("Error fetching operators:", error);
+                showModal('Errore Database', `Impossibile caricare la lista degli operatori. Dettagli: ${error.message}`, 'error');
+                operatorListEl.innerHTML = '<p class="text-center text-red-500">Errore nel caricamento degli operatori.</p>';
+            });
+        }
+        
+        function renderOperatorList(operators) {
+            operatorListEl.innerHTML = '';
+            if (operators.length === 0) {
+                operatorListEl.innerHTML = '<p class="text-slate-500 text-center py-8">Nessun operatore registrato. Aggiungine uno usando il form a sinistra.</p>';
+                return;
+            }
+            operators.forEach(op => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200';
+                div.innerHTML = `
+                    <div class="flex-grow">
+                        <p class="font-bold text-brand-dark">${op.Nome}</p>
+                        <p class="text-sm text-slate-500">${op.Qualifica} - ${op.Servizio}</p>
+                    </div>
+                    <div class="flex-shrink-0 flex items-center space-x-2">
+                        <button data-id="${op.id}" class="edit-btn p-2 text-slate-500 hover:bg-yellow-100 hover:text-yellow-600 rounded-full transition"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                        <button data-id="${op.id}" class="delete-btn p-2 text-slate-500 hover:bg-red-100 hover:text-red-600 rounded-full transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                `;
+                operatorListEl.appendChild(div);
+            });
+            lucide.createIcons();
+            operatorListEl.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', handleEditOperator));
+            operatorListEl.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', handleDeleteOperator));
+        }
+
+        async function handleOperatorFormSubmit(event) {
+            event.preventDefault();
+            if (!userId) {
+                showModal('Errore', 'Utente non autenticato. Impossibile salvare i dati.', 'error');
+                return;
+            }
+            const operatorId = operatorIdInput.value;
+            const data = {
+                Nome: document.getElementById('op-nome').value,
+                Qualifica: document.getElementById('op-qualifica').value,
+                Servizio: document.getElementById('op-servizio').value,
+                Struttura: document.getElementById('op-struttura').value,
+                OreContrattuali: Number(document.getElementById('op-ore').value)
+            };
+            try {
+                if (operatorId) {
+                    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, operatorId), data);
+                    showModal('Successo', 'Operatore aggiornato con successo!', 'success');
+                } else {
+                    await addDoc(collection(db, `artifacts/${appId}/users/${userId}/operatori`), data);
+                    showModal('Successo', 'Operatore aggiunto con successo!', 'success');
+                }
+                resetOperatorForm();
+            } catch (error) {
+                console.error("Error saving operator:", error);
+                showModal('Errore Database', `Impossibile salvare i dati dell'operatore. Dettagli: ${error.message}`, 'error');
+            }
+        }
+        
+        function handleEditOperator(event) {
+            const id = event.currentTarget.dataset.id;
+            const operator = operatorsData.find(op => op.id === id);
+            if (operator) {
+                operatorIdInput.value = operator.id;
+                document.getElementById('op-nome').value = operator.Nome;
+                document.getElementById('op-qualifica').value = operator.Qualifica;
+                document.getElementById('op-servizio').value = operator.Servizio;
+                document.getElementById('op-struttura').value = operator.Struttura;
+                document.getElementById('op-ore').value = operator.OreContrattuali;
+                formTitle.textContent = 'Modifica Operatore';
+                saveButtonText.textContent = 'Aggiorna';
+                cancelEditBtn.classList.remove('hidden');
+                operatorForm.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+        
+        function handleDeleteOperator(event) {
+            const id = event.currentTarget.dataset.id;
+            const operator = operatorsData.find(op => op.id === id);
+            if (operator) {
+                showConfirm('Conferma Eliminazione', `Sei sicuro di voler eliminare l'operatore <strong>${operator.Nome}</strong>? L'azione è irreversibile.`, async () => {
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, id));
+                        showModal('Successo', 'Operatore eliminato con successo.', 'success');
+                    } catch (error) {
+                        console.error("Error deleting operator: ", error);
+                        showModal('Errore Database', `Impossibile eliminare l'operatore. Dettagli: ${error.message}`, 'error');
+                    }
+                });
+            }
+        }
+
+        function resetOperatorForm() {
+            operatorForm.reset();
+            operatorIdInput.value = '';
+            formTitle.textContent = 'Aggiungi Operatore';
+            saveButtonText.textContent = 'Salva';
+            cancelEditBtn.classList.add('hidden');
+        }
+
+        function handleOperatorCsvImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const text = e.target.result;
+                    const rows = text.trim().split(/\r?\n/);
+                    if (rows.length < 2) throw new Error("File CSV vuoto o con solo intestazione.");
+                    const headers = rows[0].split(';').map(h => h.trim());
+                    const requiredHeaders = ["Nome", "Qualifica", "Servizio", "Struttura", "Ore Contrattuali"];
+                    if (!requiredHeaders.every(h => headers.includes(h))) {
+                        throw new Error(`L'intestazione del CSV deve contenere le colonne: ${requiredHeaders.join(', ')}`);
+                    }
+                    const operatorsToImport = rows.slice(1).map(rowStr => {
+                        const values = rowStr.split(';');
+                        const opData = {};
+                        headers.forEach((header, i) => {
+                           if(header === 'Nome') opData.Nome = values[i]?.trim();
+                           if(header === 'Qualifica') opData.Qualifica = values[i]?.trim();
+                           if(header === 'Servizio') opData.Servizio = values[i]?.trim();
+                           if(header === 'Struttura') opData.Struttura = values[i]?.trim();
+                           if(header === 'Ore Contrattuali') opData.OreContrattuali = Number(values[i]?.trim().replace(',', '.'));
+                        });
+                        return opData;
+                    });
+                    showConfirm('Conferma Importazione', `Stai per importare <strong>${operatorsToImport.length}</strong> operatori. Vuoi procedere?`, async () => {
+                        let successCount = 0;
+                        const operatorsColRef = collection(db, `artifacts/${appId}/users/${userId}/operatori`);
+                        for (const op of operatorsToImport) {
+                            if(op.Nome && op.Qualifica){
+                                await addDoc(operatorsColRef, op);
+                                successCount++;
+                            }
+                        }
+                        showModal('Importazione Completata', `${successCount} su ${operatorsToImport.length} operatori sono stati importati con successo.`, 'success');
+                    });
+                } catch (error) {
+                    showModal('Errore Importazione CSV', `Impossibile importare gli operatori. <br>Dettagli: ${error.message}`, 'error');
+                } finally {
+                    operatorCsvImport.value = '';
+                }
+            };
+            reader.readAsText(file, 'ISO-8859-1');
+        }
+
+    </script>
 </body>
 </html>
