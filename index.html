@@ -219,12 +219,17 @@
                     <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm">
                         <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
                              <h2 class="text-xl font-bold text-brand-dark">Elenco Operatori</h2>
-                             <div>
+                             <div class="flex items-center gap-2">
                                 <label for="operator-csv-import" class="cursor-pointer bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition inline-flex items-center gap-2 text-sm">
                                     <i data-lucide="users-round"></i>
                                     Importa da CSV
                                 </label>
                                 <input type="file" id="operator-csv-import" class="hidden" accept=".csv">
+                                <input type="checkbox" id="select-all-ops" class="h-4 w-4 text-brand-primary border-gray-300 rounded" title="Seleziona tutti">
+                                <button id="delete-selected-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition text-sm disabled:bg-slate-400" disabled>
+                                    <i data-lucide="trash-2"></i>
+                                    Elimina Selezionati
+                                </button>
                             </div>
                         </div>
                         <div id="operator-list" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
@@ -257,6 +262,8 @@
         // --- GLOBAL VARIABLES & CONFIG ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let localMode = false;
+        const localStorageKey = `operators-${appId}`;
 
         let app, auth, db;
         let userId = null;
@@ -296,6 +303,8 @@
         const saveButtonText = document.getElementById('save-button-text');
         const cancelEditBtn = document.getElementById('cancel-edit-btn');
         const operatorCsvImport = document.getElementById('operator-csv-import');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        const selectAllOps = document.getElementById('select-all-ops');
         
         // Modal DOM elements
         const modal = document.getElementById('modal');
@@ -322,13 +331,12 @@
         // --- FIREBASE SETUP ---
         function setupFirebase() {
             if (!firebaseConfig || !firebaseConfig.projectId) {
-                console.log('Firebase config missing. Running in local mode.');
-                authStatusEl.textContent = 'Modalità locale: la gestione operatori è disabilitata.';
+                console.log('Firebase config missing. Using local storage.');
+                localMode = true;
+                authStatusEl.textContent = 'Modalità locale: i dati operatori sono salvati nel browser.';
                 authStatusEl.classList.remove('hidden');
-                const tabBtn = document.querySelector('[data-tab="operatori"]');
-                const tabContent = document.getElementById('tab-operatori');
-                if (tabBtn) tabBtn.classList.add('hidden');
-                if (tabContent) tabContent.classList.add('hidden');
+                loadOperatorsFromLocal();
+                renderOperatorList(operatorsData);
                 return;
             }
             try {
@@ -441,6 +449,11 @@
                 });
                 applyFilters();
             });
+            selectAllOps.addEventListener('change', () => {
+                operatorListEl.querySelectorAll('.select-op').forEach(cb => cb.checked = selectAllOps.checked);
+                updateDeleteSelectedButton();
+            });
+            deleteSelectedBtn.addEventListener('click', handleDeleteSelected);
         }
         
         // --- CSV HANDLING (TAB 1) ---
@@ -816,7 +829,46 @@
         }
 
         // --- OPERATOR MANAGEMENT (TAB 3) ---
+        function loadOperatorsFromLocal() {
+            const stored = localStorage.getItem(localStorageKey);
+            operatorsData = stored ? JSON.parse(stored) : [];
+            operatorsData.sort((a,b) => (a.Nome || '').localeCompare(b.Nome || ''));
+        }
+
+        function saveOperatorsToLocal() {
+            localStorage.setItem(localStorageKey, JSON.stringify(operatorsData));
+        }
+
+        function updateDeleteSelectedButton() {
+            const anySelected = operatorListEl.querySelectorAll('.select-op:checked').length > 0;
+            deleteSelectedBtn.disabled = !anySelected;
+            if (!anySelected) selectAllOps.checked = false;
+        }
+
+        function handleDeleteSelected() {
+            const selectedIds = Array.from(operatorListEl.querySelectorAll('.select-op:checked')).map(cb => cb.dataset.id);
+            if (selectedIds.length === 0) return;
+            showConfirm('Conferma Eliminazione', `Vuoi eliminare ${selectedIds.length} operatori selezionati?`, async () => {
+                if (localMode) {
+                    operatorsData = operatorsData.filter(op => !selectedIds.includes(op.id));
+                    saveOperatorsToLocal();
+                    renderOperatorList(operatorsData);
+                    showModal('Successo', 'Operatori eliminati.', 'success');
+                } else {
+                    for (const id of selectedIds) {
+                        try { await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, id)); } catch (e) { console.error(e); }
+                    }
+                    showModal('Successo', 'Operatori eliminati.', 'success');
+                }
+            });
+        }
+
         function setupOperatorListener() {
+            if (localMode) {
+                loadOperatorsFromLocal();
+                renderOperatorList(operatorsData);
+                return;
+            }
             if (!userId) return;
             if (operatorsUnsubscribe) operatorsUnsubscribe();
             const operatorsColRef = collection(db, `artifacts/${appId}/users/${userId}/operatori`);
@@ -842,9 +894,12 @@
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200';
                 div.innerHTML = `
-                    <div class="flex-grow">
-                        <p class="font-bold text-brand-dark">${op.Nome}</p>
-                        <p class="text-sm text-slate-500">${op.Qualifica} - ${op.Servizio}</p>
+                    <div class="flex items-center gap-2 flex-grow">
+                        <input type="checkbox" class="select-op h-4 w-4 text-brand-primary border-gray-300 rounded" data-id="${op.id}">
+                        <div>
+                            <p class="font-bold text-brand-dark">${op.Nome}</p>
+                            <p class="text-sm text-slate-500">${op.Qualifica} - ${op.Servizio}</p>
+                        </div>
                     </div>
                     <div class="flex-shrink-0 flex items-center space-x-2">
                         <button data-id="${op.id}" class="edit-btn p-2 text-slate-500 hover:bg-yellow-100 hover:text-yellow-600 rounded-full transition"><i data-lucide="edit" class="w-4 h-4"></i></button>
@@ -856,14 +911,11 @@
             lucide.createIcons();
             operatorListEl.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', handleEditOperator));
             operatorListEl.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', handleDeleteOperator));
+            operatorListEl.querySelectorAll('.select-op').forEach(cb => cb.addEventListener('change', updateDeleteSelectedButton));
         }
 
         async function handleOperatorFormSubmit(event) {
             event.preventDefault();
-            if (!userId) {
-                showModal('Errore', 'Utente non autenticato. Impossibile salvare i dati.', 'error');
-                return;
-            }
             const operatorId = operatorIdInput.value;
             const data = {
                 Nome: document.getElementById('op-nome').value,
@@ -873,12 +925,29 @@
                 OreContrattuali: Number(document.getElementById('op-ore').value)
             };
             try {
-                if (operatorId) {
-                    await setDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, operatorId), data);
-                    showModal('Successo', 'Operatore aggiornato con successo!', 'success');
+                if (localMode) {
+                    if (operatorId) {
+                        const idx = operatorsData.findIndex(op => op.id === operatorId);
+                        if (idx !== -1) operatorsData[idx] = { id: operatorId, ...data };
+                    } else {
+                        const newId = Date.now().toString();
+                        operatorsData.push({ id: newId, ...data });
+                    }
+                    saveOperatorsToLocal();
+                    renderOperatorList(operatorsData);
+                    showModal('Successo', 'Dati salvati in locale.', 'success');
                 } else {
-                    await addDoc(collection(db, `artifacts/${appId}/users/${userId}/operatori`), data);
-                    showModal('Successo', 'Operatore aggiunto con successo!', 'success');
+                    if (!userId) {
+                        showModal('Errore', 'Utente non autenticato. Impossibile salvare i dati.', 'error');
+                        return;
+                    }
+                    if (operatorId) {
+                        await setDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, operatorId), data);
+                        showModal('Successo', 'Operatore aggiornato con successo!', 'success');
+                    } else {
+                        await addDoc(collection(db, `artifacts/${appId}/users/${userId}/operatori`), data);
+                        showModal('Successo', 'Operatore aggiunto con successo!', 'success');
+                    }
                 }
                 resetOperatorForm();
             } catch (error) {
@@ -910,8 +979,15 @@
             if (operator) {
                 showConfirm('Conferma Eliminazione', `Sei sicuro di voler eliminare l'operatore <strong>${operator.Nome}</strong>? L'azione è irreversibile.`, async () => {
                     try {
-                        await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, id));
-                        showModal('Successo', 'Operatore eliminato con successo.', 'success');
+                        if (localMode) {
+                            operatorsData = operatorsData.filter(op => op.id !== id);
+                            saveOperatorsToLocal();
+                            renderOperatorList(operatorsData);
+                            showModal('Successo', 'Operatore eliminato.', 'success');
+                        } else {
+                            await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/operatori`, id));
+                            showModal('Successo', 'Operatore eliminato con successo.', 'success');
+                        }
                     } catch (error) {
                         console.error("Error deleting operator: ", error);
                         showModal('Errore Database', `Impossibile eliminare l'operatore. Dettagli: ${error.message}`, 'error');
@@ -926,6 +1002,8 @@
             formTitle.textContent = 'Aggiungi Operatore';
             saveButtonText.textContent = 'Salva';
             cancelEditBtn.classList.add('hidden');
+            selectAllOps.checked = false;
+            updateDeleteSelectedButton();
         }
 
         function handleOperatorCsvImport(event) {
@@ -956,11 +1034,22 @@
                     });
                     showConfirm('Conferma Importazione', `Stai per importare <strong>${operatorsToImport.length}</strong> operatori. Vuoi procedere?`, async () => {
                         let successCount = 0;
-                        const operatorsColRef = collection(db, `artifacts/${appId}/users/${userId}/operatori`);
-                        for (const op of operatorsToImport) {
-                            if(op.Nome && op.Qualifica){
-                                await addDoc(operatorsColRef, op);
-                                successCount++;
+                        if (localMode) {
+                            for (const op of operatorsToImport) {
+                                if(op.Nome && op.Qualifica){
+                                    operatorsData.push({ id: Date.now().toString() + Math.random(), ...op });
+                                    successCount++;
+                                }
+                            }
+                            saveOperatorsToLocal();
+                            renderOperatorList(operatorsData);
+                        } else {
+                            const operatorsColRef = collection(db, `artifacts/${appId}/users/${userId}/operatori`);
+                            for (const op of operatorsToImport) {
+                                if(op.Nome && op.Qualifica){
+                                    await addDoc(operatorsColRef, op);
+                                    successCount++;
+                                }
                             }
                         }
                         showModal('Importazione Completata', `${successCount} su ${operatorsToImport.length} operatori sono stati importati con successo.`, 'success');
